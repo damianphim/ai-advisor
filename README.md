@@ -40,41 +40,42 @@ Anthropic API Key (You need a key from console.anthropic.com)
 
 Navigate to the backend directory:
 
-cd backend
+```cd backend```
 
 
 Create a virtual environment:
 
 # Windows
+```
 python -m venv venv
 .\venv\Scripts\activate
 
 # Mac/Linux
 python3 -m venv venv
 source venv/bin/activate
-
+```
 
 Install dependencies:
 
-pip install -r requirements.txt
+```pip install -r requirements.txt```
 
 
 Configuration:
-Create a file named .env inside the backend/ folder and add your API key:
+Create a file named ```.env``` inside the backend/ folder and add your API key:
 
-ANTHROPIC_API_KEY=sk-ant-api03-your-actual-key-here
+```ANTHROPIC_API_KEY=sk-ant-api03-your-actual-key-here```
 
 
 2️⃣ Frontend Setup
 
 Open a new terminal window (keep the backend terminal open) and navigate to the frontend directory:
 
-cd frontend
+```cd frontend```
 
 
 Install Node dependencies:
 
-npm install
+```npm install```
 
 
 🏃‍♂️ How to Run the App
@@ -83,18 +84,20 @@ You need to run both the Backend (Server) and Frontend (Client) simultaneously.
 
 Terminal 1 (Backend):
 
+```
 cd backend
 # Ensure venv is active
 uvicorn main:app --reload
-
+```
 
 The server will start at http://localhost:8000
 
 Terminal 2 (Frontend):
 
+```
 cd frontend
 npm run dev
-
+```
 
 The client will start at http://localhost:5173
 
