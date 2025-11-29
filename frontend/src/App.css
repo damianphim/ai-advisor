@@ -1,0 +1,198 @@
+/* Import Inter Font */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --mcgill-red: #ED1B2F;
+  --bg-color: #f0f2f5;
+  --chat-bg: #ffffff;
+  --user-msg-bg: #ED1B2F; 
+  --bot-msg-bg: #f3f4f6;
+  --shadow-color: rgba(0, 0, 0, 0.1);
+}
+
+/* --- LAYOUT FIXES FOR CENTERING --- */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-color);
+  -webkit-font-smoothing: antialiased;
+  
+  /* Flexbox to center content vertically and horizontally */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* --- CHAT CONTAINER --- */
+.chat-container {
+  width: 90%; 
+  max-width: 1000px; /* Limits width on big screens */
+  height: 85vh;      /* Limits height so it floats nicely */
+  
+  background: var(--chat-bg);
+  box-shadow: 0 8px 30px var(--shadow-color);
+  border-radius: 20px;
+  
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Ensures content doesn't spill out of rounded corners */
+  position: relative;
+}
+
+/* --- HEADER --- */
+.chat-header {
+  background: var(--mcgill-red);
+  color: white;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  z-index: 10;
+}
+
+.chat-header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+
+/* --- MESSAGES AREA --- */
+.messages-area {
+  flex: 1;
+  padding: 25px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  background-color: #fff;
+  scroll-behavior: smooth;
+}
+
+/* Custom Scrollbar for Chrome/Safari */
+.messages-area::-webkit-scrollbar {
+  width: 8px;
+}
+.messages-area::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+.messages-area::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+}
+.messages-area::-webkit-scrollbar-thumb:hover {
+  background: #bbb;
+}
+
+/* --- MESSAGE BUBBLES --- */
+.message-row {
+  display: flex;
+  width: 100%;
+}
+
+.message-row.user { justify-content: flex-end; }
+.message-row.assistant { justify-content: flex-start; }
+
+.message-bubble {
+  max-width: 70%;
+  padding: 14px 18px;
+  border-radius: 18px;
+  line-height: 1.5;
+  font-size: 15px;
+  position: relative;
+  word-wrap: break-word;
+}
+
+.message-bubble.user {
+  background: var(--user-msg-bg);
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.message-bubble.assistant {
+  background: var(--bot-msg-bg);
+  color: #1f2937;
+  border-bottom-left-radius: 4px;
+}
+
+.message-bubble.error {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+/* Markdown Styling */
+.message-bubble p { margin: 0 0 8px 0; }
+.message-bubble p:last-child { margin: 0; }
+.message-bubble strong { font-weight: 600; }
+.message-bubble ul, .message-bubble ol { margin: 8px 0; padding-left: 24px; }
+.message-bubble li { margin-bottom: 4px; }
+
+/* --- INPUT AREA --- */
+.input-area {
+  padding: 20px;
+  background: white;
+  border-top: 1px solid #eaeaea;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.input-area input {
+  flex: 1;
+  padding: 14px 20px;
+  border: 2px solid #e5e7eb;
+  border-radius: 50px;
+  font-size: 16px;
+  outline: none;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.input-area input:focus {
+  border-color: var(--mcgill-red);
+  box-shadow: 0 0 0 3px rgba(237, 27, 47, 0.1);
+}
+
+.input-area button {
+  padding: 14px 28px;
+  background: var(--mcgill-red);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s, background-color 0.2s;
+}
+
+.input-area button:hover:not(:disabled) {
+  background-color: #d6192a;
+  transform: translateY(-1px);
+}
+
+.input-area button:disabled {
+  background: #e5e7eb;
+  color: #a1a1aa;
+  cursor: not-allowed;
+}
+
+.loading-indicator {
+  font-size: 13px;
+  color: #6b7280;
+  margin-left: 15px;
+  margin-bottom: 5px;
+  font-style: italic;
+}

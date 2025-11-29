@@ -11,13 +11,18 @@ env/
 *.key
 config.py
 
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+.DS_Store
+
 # IDE
 .vscode/
 .idea/
 *.swp
 
 # OS
-.DS_Store
 Thumbs.db
 
 # Data (optional)
