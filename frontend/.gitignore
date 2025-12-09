@@ -1,13 +1,94 @@
-# Backend
-backend/venv/
-backend/__pycache__/
-backend/*.db
-backend/.env
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.env
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
 
-# System
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+.pnp/
+.pnp.js
+
+# Production builds
+/frontend/dist
+/frontend/build
+
+# Testing
+coverage/
+.coverage
+.pytest_cache/
+.tox/
+htmlcov/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# CSV data (optional - uncomment if you don't want to commit CSV)
+# *.csv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+
+# Vercel
+.vercel
+
+# Local development
+.env.development.local
+.env.test.local
+.env.production.local

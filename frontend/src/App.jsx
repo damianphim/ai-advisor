@@ -1,13 +1,24 @@
-import React from 'react';
-import ChatInterface from './ChatInterface';
-import './App.css';
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import Login from './components/Auth/Login'
+import Dashboard from './components/Dashboard/Dashboard'
+import './App.css'
+
+function AppContent() {
+  const { user, loading } = useAuth()
+
+  if (loading) {
+    return <div className="loading">Loading...</div>
+  }
+
+  return user ? <Dashboard /> : <Login />
+}
 
 function App() {
   return (
-    <div className="App">
-      <ChatInterface />
-    </div>
-  );
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  )
 }
 
-export default App;
+export default App
