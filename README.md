@@ -1,134 +1,248 @@
-McGill AI Academic Advisor 🎓
+# McGill AI Academic Advisor 🎓
 
-An intelligent, AI-powered web application designed to help McGill University students plan their academic journey.
+An intelligent, AI-powered web application designed to help McGill University students plan their academic journey. The application combines statistical analysis of historical grade data with a conversational AI interface to provide personalized course recommendations, grade predictions, and academic advice.
 
-The application combines statistical analysis of historical grade data with a conversational AI interface to provide personalized course recommendations, grade predictions, and academic advice.
+🌐 **Live Application**: [ai-advisor-pi.vercel.app](https://ai-advisor-pi.vercel.app)
 
-✨ Features
+## ✨ Features
 
-🤖 AI Chat Advisor: A conversational interface powered by Claude 3.5 Sonnet to answer questions about courses, prerequisites, and career paths.
+### 🤖 AI Chat Advisor
+Conversational interface powered by Claude 3.5 Sonnet to answer questions about courses, prerequisites, and career paths with context-aware responses.
 
-💾 Persistent User History: Automatically saves your chat history and profile preferences (major, year, interests) to a PostgreSQL database so you can pick up where you left off.
+### 🔐 User Authentication
+Secure authentication system with persistent user profiles and preferences.
 
-📊 Grade Prediction: Uses historical data and your current GPA to estimate your performance in future courses.
+### 💾 Persistent Chat History
+Automatically saves your conversation history to the cloud, allowing you to access past discussions from any device.
 
-🎯 Smart Recommendations: Suggests courses based on your major, interests, and preferred difficulty level.
+### 📊 Grade Prediction
+Uses historical data and your current GPA to estimate your performance in future courses.
 
-📈 Difficulty Analysis: Breaks down course difficulty based on crowdsourced class averages.
+### 🎯 Smart Course Recommendations
+Suggests courses based on your major, interests, and preferred difficulty level, backed by real historical data.
 
-🛠️ Tech Stack
+### 📈 Difficulty Analysis
+Provides detailed course difficulty breakdowns based on crowdsourced class averages from McGill students.
 
-Frontend: React (Vite), CSS3, Axios
+### 🗂️ Interactive Course Explorer
+Browse and search through McGill's course catalog with detailed information about each course.
 
-Backend: Python (FastAPI), Uvicorn
+### 🎨 McGill-Branded UI
+Professional dashboard design featuring McGill's official colors and branding guidelines.
 
-Database: PostgreSQL, SQLAlchemy (Async), AsyncPG
+## 🛠️ Tech Stack
 
-AI Engine: Anthropic Claude API (Sonnet 3.5)
+### Frontend
+- **Framework**: React (Vite)
+- **Styling**: CSS3 with McGill branding
+- **HTTP Client**: Axios
+- **Deployment**: Vercel
 
-Data Science: Pandas, NumPy (for CSV seeding and analysis)
+### Backend
+- **Framework**: Python (FastAPI)
+- **Server**: Uvicorn
+- **API**: RESTful endpoints with async support
 
-🚀 Getting Started
+### Database
+- **Production**: Supabase (PostgreSQL)
+- **ORM**: SQLAlchemy (Async)
+- **Driver**: AsyncPG
 
-Follow these instructions to get a copy of the project up and running on your local machine.
+### AI Engine
+- **Model**: Anthropic Claude 3.5 Sonnet
+- **Integration**: Claude API with conversation history context
 
-Prerequisites
-```
-Python 3.8+
+### Data Processing
+- **Libraries**: Pandas, NumPy
+- **Purpose**: CSV data seeding and statistical analysis
 
-Node.js & npm (for the frontend)
+## 🚀 Getting Started
 
-PostgreSQL (Running locally or hosted)
+Follow these instructions to run the project locally or deploy your own instance.
 
-Anthropic API Key (Get one from console.anthropic.com)
-```
-1️⃣ Backend Setup
+### Prerequisites
+
+- Python 3.8+
+- Node.js & npm
+- PostgreSQL (local) or Supabase account
+- Anthropic API Key ([Get one here](https://console.anthropic.com))
+
+### 1️⃣ Backend Setup
 
 Navigate to the backend directory:
-```
+
+```bash
 cd backend
 ```
 
-Create a virtual environment:
+Create and activate a virtual environment:
 
-Windows:
-```
+**Windows:**
+```bash
 python -m venv venv
 .\venv\Scripts\activate
 ```
 
-Mac/Linux:
-```
+**Mac/Linux:**
+```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
 Install dependencies:
-```
+
+```bash
 pip install -r requirements.txt
 ```
 
-Configuration:
-Create a file named .env inside the backend/ folder and add your API key and Database URL:
-```
+### Configuration
+
+Create a `.env` file in the `backend/` directory:
+
+```env
 ANTHROPIC_API_KEY=sk-ant-api03-your-actual-key-here
-DATABASE_URL=postgresql+asyncpg://user:password@localhost/mcgill_advisor
+DATABASE_URL=postgresql+asyncpg://user:password@host:port/database
 ```
 
-Note: If you don't provide a DATABASE_URL, the app defaults to postgresql+asyncpg://postgres:postgres@localhost/mcgill_advisor.
-
-2️⃣ Database Setup
-
-Ensure your PostgreSQL server is running and create the database:
+**For Supabase:**
+Get your connection string from Supabase Dashboard → Project Settings → Database and convert it to asyncpg format:
+```env
+DATABASE_URL=postgresql+asyncpg://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
 ```
+
+**For Local PostgreSQL:**
+```env
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost/mcgill_advisor
+```
+
+### 2️⃣ Database Setup
+
+The application uses SQLAlchemy to automatically generate tables (`users`, `chat_messages`, `courses`) on startup. 
+
+**Initial Seed:**
+On first run, the application will automatically seed the database with course data from `ClassAverageCrowdSourcing.csv` if the courses table is empty.
+
+**Manual Database Creation (Local PostgreSQL only):**
+```sql
 CREATE DATABASE mcgill_advisor;
 ```
 
-The application uses SQLAlchemy to automatically generate tables (users, chat_messages, courses) upon startup. It will also automatically seed the database with the ClassAverageCrowdSourcing.csv data if the courses table is empty.
+### 3️⃣ Frontend Setup
 
-3️⃣ Frontend Setup
+In a new terminal, navigate to the frontend directory:
 
-Open a new terminal window (keep the backend terminal open) and navigate to the frontend directory:
-```
+```bash
 cd frontend
 ```
 
-Install Node dependencies:
-```
+Install dependencies:
+
+```bash
 npm install
 ```
 
-🏃‍♂️ How to Run the App
+### Configuration
 
-You need to run both the Backend (Server) and Frontend (Client) simultaneously.
+Update the API endpoint in your frontend code if needed. For local development, ensure the backend URL points to `http://localhost:8000`.
 
-Terminal 1 (Backend):
-```
+## 🏃‍♂️ Running the Application
+
+You need to run both the backend and frontend simultaneously.
+
+### Terminal 1 (Backend):
+
+```bash
 cd backend
 # Ensure venv is active
 uvicorn main:app --reload
 ```
 
-The server will start at http://localhost:8000. Watch the logs for "🌱 Seeding database..." on the first run.
+Server will start at `http://localhost:8000`
 
-Terminal 2 (Frontend):
-```
+### Terminal 2 (Frontend):
+
+```bash
 cd frontend
 npm run dev
 ```
 
-The client will start at http://localhost:5173.
+Client will start at `http://localhost:5173`
 
-Open your browser to http://localhost:5173 to start using the advisor!
+Open your browser to `http://localhost:5173` to use the advisor!
 
-🧪 Future Roadmap
+## 🌐 Deployment
 
-[ ] Prerequisite Checking: Implement a DAG (Directed Acyclic Graph) to ensure students meet course requirements.
+### Backend (Railway/Render/Fly.io)
 
-[ ] Machine Learning Overhaul: Replace current heuristic grade prediction with a Scikit-Learn Regression model.
+1. Connect your GitHub repository
+2. Set environment variables:
+   - `ANTHROPIC_API_KEY`
+   - `DATABASE_URL` (Supabase connection string)
+3. Deploy from `backend` directory
 
-[ ] Authentication: Add actual login/signup screens (currently uses username-based identity).
+### Frontend (Vercel)
 
-📄 License
+1. Import your GitHub repository to Vercel
+2. Set the root directory to `frontend`
+3. Build command: `npm run build`
+4. Output directory: `dist`
+5. Add environment variable for API URL if needed
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+### Database (Supabase)
+
+1. Create a new Supabase project
+2. Copy the connection string from Project Settings → Database
+3. Update `DATABASE_URL` in your backend environment variables
+
+## 📁 Project Structure
+
+```
+ai-advisor/
+├── backend/
+│   ├── main.py                 # FastAPI app and endpoints
+│   ├── database.py             # SQLAlchemy models and connection
+│   ├── requirements.txt        # Python dependencies
+│   ├── .env                    # Environment variables (not tracked)
+│   └── ClassAverageCrowdSourcing.csv
+├── frontend/
+│   ├── src/
+│   │   ├── components/        # React components
+│   │   ├── App.jsx           # Main application component
+│   │   └── App.css           # Styles with McGill branding
+│   ├── package.json
+│   └── vite.config.js
+├── .gitignore
+├── LICENSE
+└── README.md
+```
+
+## 🧪 Future Roadmap
+
+- [ ] **Prerequisite Checking**: Implement a DAG (Directed Acyclic Graph) to validate course requirements
+- [ ] **Machine Learning Enhancement**: Replace heuristic grade prediction with Scikit-Learn regression models
+- [ ] **Enhanced Authentication**: Add password reset, email verification, and OAuth providers
+- [ ] **Mobile Optimization**: Responsive design improvements for mobile devices
+- [ ] **Course Schedule Builder**: Visual semester planning with conflict detection
+- [ ] **Peer Reviews**: Community-driven course reviews and ratings
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Course data sourced from McGill student crowdsourcing efforts
+- Powered by Anthropic's Claude AI
+- Built for McGill University students
+
+## 📧 Contact
+
+For questions or feedback, please open an issue on GitHub.
+
+---
+
+Made with ❤️ for McGill students
