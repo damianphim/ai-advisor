@@ -4,9 +4,9 @@ from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 import time
 
-from config import settings, get_settings
-from logging_config import setup_logging
-from exceptions import (
+from .config import settings, get_settings
+from .logging_config import setup_logging
+from .exceptions import (
     AppException,
     app_exception_handler,
     validation_exception_handler,

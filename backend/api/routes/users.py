@@ -17,7 +17,7 @@ from api.exceptions import (
     UserAlreadyExistsException,
     DatabaseException
 )
-from config import settings
+from ..config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

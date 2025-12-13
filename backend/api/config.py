@@ -2,7 +2,7 @@
 Centralized configuration management with validation
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
+from pydantic import field_validator, Field
 from typing import List
 import os
 
@@ -49,7 +49,7 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             # Parse comma-separated string from env
             return [origin.strip() for origin in v.split(',')]
-    return v
+        return v
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 20

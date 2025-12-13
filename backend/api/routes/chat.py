@@ -7,7 +7,7 @@ from typing import List, Optional
 import anthropic
 import logging
 
-from config import settings
+from ..config import settings
 from api.utils.supabase_client import (
     get_user_by_id,
     get_chat_history,

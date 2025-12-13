@@ -6,7 +6,7 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 import logging
 
-from config import settings
+from ..config import settings
 from api.utils.supabase_client import search_courses, get_course
 from api.exceptions import DatabaseException
 
