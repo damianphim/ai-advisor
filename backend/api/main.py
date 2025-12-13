@@ -43,10 +43,18 @@ app = FastAPI(
     redoc_url="/api/redoc" if settings.DEBUG else None,
 )
 
+# Get origins from settings
+origins = settings.ALLOWED_ORIGINS
+
+# Add any additional preview deployments if needed
+if settings.ENVIRONMENT == "production":
+    # You can add specific preview URLs here if needed
+    pass
+
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=origins,  # Use explicit list from config
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
