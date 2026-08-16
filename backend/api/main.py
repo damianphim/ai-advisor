@@ -176,7 +176,12 @@ class SupabaseRateLimiter:
         limit = rpm or self.default_rpm
         window = self._window_start()
 
-        try:
+        def _run():
+            # Fetched INSIDE the retried closure, not captured before
+            # with_retry runs it: a retry resets the global client singleton
+            # (_reset_client), so grabbing it here is what makes a retry
+            # actually use the fresh connection rather than the one that just
+            # failed.
             supabase = self._get_supabase()
 
             # For true atomicity we call a small Postgres function.
@@ -188,7 +193,19 @@ class SupabaseRateLimiter:
                     {'p_key': key, 'p_window': window}
                 ).execute()
                 new_count = result.data  # function returns the new count integer
-            except Exception:
+            except Exception as rpc_exc:
+                # A connection/timeout failure means this attempt never really
+                # talked to Postgres, so falling back to two MORE calls on the
+                # same broken connection just wastes time before with_retry
+                # gets to retry anyway (and during a real outage, multiplies
+                # every retry attempt into up to 3 Supabase round-trips
+                # instead of 1). Only fall back to the manual read+write path
+                # for a genuinely different failure — e.g. the RPC function
+                # not existing yet — where a fresh connection wouldn't help
+                # and retrying the SAME rpc() call would just fail again.
+                from .utils.supabase_client import _is_connection_error, _is_timeout
+                if _is_connection_error(rpc_exc) or _is_timeout(rpc_exc):
+                    raise
                 # Fallback: read + write (slightly less atomic but fine for our
                 # traffic levels — duplicate requests within microseconds would
                 # both pass, which is acceptable).
@@ -220,6 +237,34 @@ class SupabaseRateLimiter:
                 self._prune(supabase)
 
             return new_count < limit
+
+        try:
+            # SYMBOLOS-BACKEND-19: this used to call the DB exactly once and
+            # fall back to the degraded in-memory limiter on ANY exception,
+            # including a single transient connection blip — the same class
+            # of error the rest of the codebase already retries via
+            # with_retry()/_is_connection_error(). Every other Supabase call
+            # site got that resilience; this one, added earlier, never did.
+            #
+            # retry_on_timeout=True: the usual reason to leave this False is
+            # that retrying a non-idempotent write after a read-timeout could
+            # duplicate a row. Here the "duplicate" is a rate-limit counter
+            # being one higher than reality, which makes the limiter slightly
+            # MORE restrictive, never less — the safe direction for a rate
+            # limiter to err in, unlike a generic write.
+            # Lazy import, matching every other supabase_client use in this
+            # module — avoids a circular import and keeps cold-start fast.
+            #
+            # is_allowed() is called synchronously from inside `async def`
+            # middleware, so with_retry's time.sleep backoff can block the
+            # event loop for up to ~0.9s (MAX_RETRIES=3) on a genuine
+            # multi-attempt retry. That matches every other synchronous
+            # Supabase call already wrapped in with_retry throughout this
+            # codebase (get_user_by_id, create_user, …) called the same way
+            # from async routes — not a new risk this introduces, just the
+            # same accepted tradeoff applied consistently.
+            from .utils.supabase_client import with_retry
+            return with_retry("rate_limiter", _run, retry_on_timeout=True)
 
         except Exception as e:
             logger.error(
