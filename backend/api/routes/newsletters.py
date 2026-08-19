@@ -570,9 +570,17 @@ def _parse_time_fuzzy(text: str) -> Optional[str]:
 
 
 def _is_safe_url(url: str) -> bool:
-    """Block SSRF: reject private/internal IPs and non-HTTP schemes."""
+    """Block SSRF: reject private/internal IPs and non-HTTP schemes.
+
+    A symbolic hostname that isn't itself a private-IP literal can still
+    resolve to one (DNS rebinding, or just pointing a domain at 127.0.0.1 /
+    a cloud metadata address), so resolve it here and check every address
+    it comes back with rather than trusting the string form of the host.
+    """
     from urllib.parse import urlparse
     import ipaddress
+    import socket
+
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         return False
@@ -586,20 +594,39 @@ def _is_safe_url(url: str) -> bool:
         ip = ipaddress.ip_address(hostname)
         return ip.is_global
     except ValueError:
-        # Not an IP — hostname is OK (DNS will resolve it)
-        return True
+        pass
+    try:
+        addrs = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        return False
+    return all(ipaddress.ip_address(addr[4][0]).is_global for addr in addrs)
 
 
-def _fetch_page(url: str) -> Optional[str]:
-    """Fetch a URL, return HTML or None."""
+def _fetch_page(url: str, _redirects_remaining: int = 5) -> Optional[str]:
+    """Fetch a URL, return HTML or None.
+
+    Redirects are followed manually (not via httpx's follow_redirects) so
+    each hop's target is re-validated through _is_safe_url — a URL that
+    passes the safety check can still redirect straight to an internal
+    address on the next hop, and blind auto-following would fetch it anyway.
+    """
     import httpx
     if not _is_safe_url(url):
         logger.warning(f"Blocked unsafe URL: {url}")
         return None
     try:
-        resp = httpx.get(url, timeout=15, follow_redirects=True, headers={
+        resp = httpx.get(url, timeout=15, follow_redirects=False, headers={
             "User-Agent": "Symbolos-Bot/1.0 (McGill student calendar tool)",
         })
+        if resp.is_redirect:
+            if _redirects_remaining <= 0:
+                logger.warning(f"Too many redirects fetching {url}")
+                return None
+            location = resp.headers.get("location")
+            if not location:
+                return None
+            next_url = str(httpx.URL(url).join(location))
+            return _fetch_page(next_url, _redirects_remaining - 1)
         return resp.text if resp.status_code == 200 else None
     except Exception as e:
         logger.warning(f"Fetch {url} failed: {e}")

@@ -141,3 +141,4 @@ frontend/ios/App/App.xcodeproj/xcuserdata/
 
 # Local DB snapshots taken before destructive operations
 backups/
+strix_runs/

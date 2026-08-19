@@ -362,6 +362,29 @@ def test_get_club_members_sorts_owner_first(client, fake_supabase):
     assert body["members"][0]["name"] == "Owner"
 
 
+def test_get_club_members_does_not_promote_a_member_when_owner_row_is_gone(client, fake_supabase):
+    """Regression: GET /members used to silently reassign clubs.created_by
+    (and the new owner's user_clubs role) to an arbitrary member whenever
+    the recorded owner's `users` row was missing — letting any Member
+    become Owner just by viewing the roster once the real Owner's account
+    was deleted. A read-only GET must never mutate ownership."""
+    fake_supabase.set_table("clubs", [{"id": "c1", "created_by": "gone-owner"}])
+    fake_supabase.set_table("users", [
+        {"id": "member-1", "email": "member.one@mail.mcgill.ca"},
+    ])
+    fake_supabase.set_table("user_clubs", [
+        {"user_id": "member-1", "club_id": "c1", "role": "member"},
+    ])
+
+    resp = client.get("/api/clubs/c1/members", headers=auth("member-1"))
+
+    assert resp.status_code == 200
+    assert fake_supabase._tables["clubs"][0]["created_by"] == "gone-owner"
+    assert fake_supabase._tables["user_clubs"][0]["role"] == "member"
+    body = resp.json()
+    assert [m["role"] for m in body["members"]] == ["member"]
+
+
 def test_update_member_role_owner_can_promote(client, fake_supabase):
     fake_supabase.set_table("clubs", [{"id": "c1", "created_by": "owner-1"}])
     fake_supabase.set_table("user_clubs", [

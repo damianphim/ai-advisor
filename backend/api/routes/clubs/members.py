@@ -27,24 +27,11 @@ async def get_club_members(club_id: str, current_user_id: str = Depends(get_curr
     club_result = supabase.table("clubs").select("created_by").eq("id", club_id).execute()
     owner_id = club_result.data[0].get("created_by") if club_result.data else None
 
-    # If the owner's account no longer exists, transfer ownership to a random admin (or member)
-    if owner_id:
-        owner_exists = supabase.table("users").select("id").eq("id", owner_id).execute()
-        if not owner_exists.data:
-            logger.warning(f"Club {club_id} owner {owner_id} no longer exists, transferring ownership")
-            memberships_all = supabase.table("user_clubs").select("user_id, role").eq("club_id", club_id).execute()
-            candidates = [m for m in (memberships_all.data or []) if m["user_id"] != owner_id]
-            # Prefer admins, then any member
-            admins = [m for m in candidates if m.get("role") == "admin"]
-            new_owner = (admins[0] if admins else candidates[0]) if candidates else None
-            if new_owner:
-                new_owner_id = new_owner["user_id"]
-                supabase.table("clubs").update({"created_by": new_owner_id}).eq("id", club_id).execute()
-                supabase.table("user_clubs").update({"role": "owner"}).eq("club_id", club_id).eq("user_id", new_owner_id).execute()
-                # Remove the old owner from user_clubs if they're still there
-                supabase.table("user_clubs").delete().eq("club_id", club_id).eq("user_id", owner_id).execute()
-                owner_id = new_owner_id
-                logger.info(f"Club {club_id} ownership transferred to {new_owner_id}")
+    # Stale-owner reassignment used to happen here as a side effect of this
+    # read-only GET, letting any Member become Owner just by viewing the
+    # member list once the real Owner's profile row was gone. Orphaned-owner
+    # recovery, if still needed, belongs in a separate admin-gated endpoint
+    # with deterministic successor selection — not a side effect of a GET.
 
     if current_user_id == owner_id:
         caller_role = "owner"
