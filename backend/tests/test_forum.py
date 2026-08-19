@@ -377,3 +377,64 @@ def test_list_posts_search_request_succeeds(client, fake_supabase):
         headers=auth("user-1"),
     )
     assert resp.status_code == 200
+
+
+# -- Self-like ranking-manipulation guard -----------------------------------
+
+def test_author_cannot_like_own_post(client, fake_supabase):
+    """toggle_post_like must reject self-likes (mirrors report_post's
+    existing 'cannot report your own post' check) — otherwise an author
+    could inflate like_count, which feeds the hot/top ranking directly."""
+    create = client.post(
+        "/api/forum/posts",
+        json=_base_payload(category="general", review_target_value=None, rating=None),
+        headers=auth("author-1"),
+    )
+    assert create.status_code == 201
+    post_id = create.json()["post"]["id"]
+    for row in fake_supabase._tables["forum_posts"]:
+        if row["id"] == post_id:
+            row["like_count"] = 0
+
+    resp = client.post(f"/api/forum/posts/{post_id}/like", headers=auth("author-1"))
+    assert resp.status_code == 400
+    assert not any(
+        r["post_id"] == post_id for r in fake_supabase._tables.get("forum_post_likes", [])
+    )
+
+
+def test_author_cannot_like_own_reply(client, fake_supabase):
+    create = client.post(
+        "/api/forum/posts",
+        json=_base_payload(category="general", review_target_value=None, rating=None),
+        headers=auth("author-1"),
+    )
+    post_id = create.json()["post"]["id"]
+    reply = client.post(
+        f"/api/forum/posts/{post_id}/replies",
+        json={"author": "Some Student", "avatar_color": "#ed1b2f", "body": "reply"},
+        headers=auth("author-1"),
+    )
+    reply_id = reply.json()["reply"]["id"]
+    for row in fake_supabase._tables["forum_replies"]:
+        if row["id"] == reply_id:
+            row["like_count"] = 0
+
+    resp = client.post(f"/api/forum/replies/{reply_id}/like", headers=auth("author-1"))
+    assert resp.status_code == 400
+
+
+def test_non_author_can_still_like_post(client, fake_supabase):
+    create = client.post(
+        "/api/forum/posts",
+        json=_base_payload(category="general", review_target_value=None, rating=None),
+        headers=auth("author-1"),
+    )
+    post_id = create.json()["post"]["id"]
+    for row in fake_supabase._tables["forum_posts"]:
+        if row["id"] == post_id:
+            row["like_count"] = 0
+
+    resp = client.post(f"/api/forum/posts/{post_id}/like", headers=auth("viewer-1"))
+    assert resp.status_code == 200
+    assert resp.json()["liked"] is True

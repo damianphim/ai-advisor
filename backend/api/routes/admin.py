@@ -92,6 +92,12 @@ def verify_admin_token(token: str) -> bool:
 
 _ADMIN_RATE_LIMIT = 5    # max attempts per IP per window
 _ADMIN_RATE_WINDOW = 60  # seconds
+# Global cap shared by ALL callers regardless of claimed IP — closes the
+# X-Forwarded-For header-rotation bypass of the per-IP limiter above (an
+# attacker who supplies a fresh fake IP on every request would otherwise
+# never hit the per-IP cap).
+_ADMIN_GLOBAL_RATE_LIMIT = 20   # max attempts across all IPs per window
+_ADMIN_GLOBAL_KEY = "admin_login:__global__"
 
 # In-memory fallback (used only when Supabase is down)
 _fallback_attempts: dict[str, list[float]] = defaultdict(list)
@@ -103,7 +109,24 @@ def _check_admin_rate_limit(ip: str) -> None:
     Uses Supabase for shared state across instances; falls back to in-memory.
     Raises HTTP 429 if the limit is exceeded.
     """
-    key = f"admin_login:{ip}"
+    # SEC-FIX: `ip` is derived from a client-controllable header
+    # (X-Forwarded-For) with no verification that it was actually appended
+    # by a trusted single proxy hop. Keying the ONLY limiter by this value
+    # lets an attacker mint a fresh, never-before-seen key on every request
+    # (a new fake IP each time) and get an unlimited number of attempts.
+    # Fix: bound the credential check with a global, non-spoofable counter
+    # in addition to the existing per-IP one, so header rotation can no
+    # longer produce unlimited attempts against ADMIN_SECRET.
+    _check_admin_rate_limit_key(f"admin_login:{ip}", _ADMIN_RATE_LIMIT, log_label=f"IP: {ip}")
+    _check_admin_rate_limit_key(_ADMIN_GLOBAL_KEY, _ADMIN_GLOBAL_RATE_LIMIT, log_label="global")
+
+
+def _check_admin_rate_limit_key(key: str, limit: int, *, log_label: str) -> None:
+    """
+    Block the request if `key` has exceeded `limit` attempts in the current
+    window. Uses Supabase for shared state across instances; falls back to
+    in-memory. Raises HTTP 429 if the limit is exceeded.
+    """
     now = time.time()
     window_start_ts = now - _ADMIN_RATE_WINDOW
 
@@ -143,8 +166,8 @@ def _check_admin_rate_limit(ip: str) -> None:
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 }).execute()
 
-        if attempt_count > _ADMIN_RATE_LIMIT:
-            logger.warning(f"Admin brute-force lockout (Supabase) for IP: {ip}")
+        if attempt_count > limit:
+            logger.warning(f"Admin brute-force lockout (Supabase) for {log_label}")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Too many login attempts. Please wait 60 seconds.",
@@ -157,15 +180,15 @@ def _check_admin_rate_limit(ip: str) -> None:
         logger.warning(f"Admin rate-limit DB error, falling back to in-memory: {e}")
 
     # ── In-memory fallback ────────────────────────────────────────────────────
-    attempts = _fallback_attempts[ip]
-    _fallback_attempts[ip] = [t for t in attempts if t > window_start_ts]
-    if len(_fallback_attempts[ip]) >= _ADMIN_RATE_LIMIT:
-        logger.warning(f"Admin brute-force lockout (in-memory fallback) for IP: {ip}")
+    attempts = _fallback_attempts[key]
+    _fallback_attempts[key] = [t for t in attempts if t > window_start_ts]
+    if len(_fallback_attempts[key]) >= limit:
+        logger.warning(f"Admin brute-force lockout (in-memory fallback) for {log_label}")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many login attempts. Please wait 60 seconds.",
         )
-    _fallback_attempts[ip].append(now)
+    _fallback_attempts[key].append(now)
 
 
 # ── Request schema ────────────────────────────────────────────────────────────
@@ -189,8 +212,12 @@ async def verify_admin(request: AdminLoginRequest, req: Request):
     """
     forwarded_for = req.headers.get("x-forwarded-for")
     if forwarded_for:
-        # Use the rightmost entry — appended by Vercel's infrastructure,
-        # not spoofable by the client (see main.py _get_client_ip for details).
+        # Use the rightmost entry — appended by Vercel's infrastructure in
+        # the common case. This value is still attacker-influenced input
+        # (there is no verification the request actually traversed a
+        # trusted single-hop proxy that appends rather than passes the
+        # header through untouched), so `_check_admin_rate_limit` also
+        # enforces a global, non-IP-keyed cap — see its definition.
         parts = [p.strip() for p in forwarded_for.split(",") if p.strip()]
         client_ip = parts[-1] if parts else "unknown"
     else:

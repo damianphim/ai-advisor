@@ -1086,6 +1086,11 @@ async def delete_card(user_id: str, card_id: str, req: Request, current_user_id:
 @router.post("/ask/{user_id}", response_model=dict)
 async def ask_card(user_id: str, request: AskRequest, req: Request, current_user_id: str = Depends(get_current_user_id), user_sb=Depends(get_user_db)):
     require_self(current_user_id, user_id)
+    from ..utils.verified_user import is_email_verified
+    from ..utils.llm_budget import check_and_record_llm_usage
+    if not is_email_verified(current_user_id):
+        raise HTTPException(status_code=403, detail={"code": "email_not_verified", "message": "Verify your email to ask the advisor."})
+    check_and_record_llm_usage(current_user_id, kind="cards")
     sanitise_user_message(request.question)
     try:
         get_user_by_id(user_id)
@@ -1130,6 +1135,11 @@ async def thread_message(
     passed in the messages array for conversation continuity.
     """
     require_self(current_user_id, request.user_id)
+    from ..utils.verified_user import is_email_verified
+    from ..utils.llm_budget import check_and_record_llm_usage
+    if not is_email_verified(current_user_id):
+        raise HTTPException(status_code=403, detail={"code": "email_not_verified", "message": "Verify your email to use the advisor."})
+    check_and_record_llm_usage(current_user_id, kind="cards")
     sanitise_user_message(request.message)
 
     try:

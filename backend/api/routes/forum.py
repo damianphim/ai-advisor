@@ -624,6 +624,12 @@ async def toggle_post_like(
     """
     require_mcgill_email(current_user_id)
     try:
+        post_check = user_sb.table("forum_posts").select("user_id").eq("id", post_id).execute()
+        if not post_check.data:
+            raise HTTPException(status_code=404, detail="Post not found")
+        if post_check.data[0]["user_id"] == current_user_id:
+            raise HTTPException(status_code=400, detail="You cannot like your own post")
+
         # Check if already liked
         existing = (
             user_sb.table("forum_post_likes")
@@ -654,6 +660,8 @@ async def toggle_post_like(
 
         return {"liked": not already_liked, "like_count": like_count}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Error toggling post like: {e}")
         raise HTTPException(status_code=500, detail="Failed to toggle like")
@@ -670,6 +678,12 @@ async def toggle_reply_like(
 ):
     """Toggle like on a reply."""
     try:
+        reply_check = user_sb.table("forum_replies").select("user_id").eq("id", reply_id).execute()
+        if not reply_check.data:
+            raise HTTPException(status_code=404, detail="Reply not found")
+        if reply_check.data[0]["user_id"] == current_user_id:
+            raise HTTPException(status_code=400, detail="You cannot like your own reply")
+
         existing = (
             user_sb.table("forum_reply_likes")
             .select("user_id")
@@ -694,6 +708,8 @@ async def toggle_reply_like(
 
         return {"liked": not already_liked, "like_count": like_count}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Error toggling reply like: {e}")
         raise HTTPException(status_code=500, detail="Failed to toggle like")
