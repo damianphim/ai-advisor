@@ -10,7 +10,7 @@
 | [adr/](adr/) | Architecture decision records — read these for *why*, not just *what*. |
 | [agents/](agents/) | Docs for AI agents working in this repo — issue tracker conventions, triage labels, domain-doc policy. |
 
-## Not here
+## here
 
 Operational runbooks — secrets inventory, DNS/DMARC hardening, incident response, infrastructure ownership — live in a private companion repo, not this one, because this repo is public. Ask a maintainer for access if you need them.
 
