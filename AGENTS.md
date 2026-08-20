@@ -84,7 +84,7 @@ npm run build
 
 Local full-stack dev needs three processes running together: backend (`uvicorn api.main:app --reload --port 8000`), the Inngest dev server (`:8288`, required for transcript/syllabus upload — otherwise those endpoints 503), and frontend (`npm run dev`, `:5173`).
 
-CI (`.github/workflows/ci.yml`) runs: backend compile + ruff (errors only) + `pip-audit` (blocks on any known CVE) + `pytest tests/`; frontend `npm audit --audit-level=critical` + lint (non-blocking) + `npm test` + `npm run build` + Lighthouse budget (non-blocking, `lighthouserc.json`); a repo-wide gitleaks secret scan. **Branch protection is not turned on for `main`** — green CI is a norm, not an enforced gate, so check `gh api repos/damianphim/symbolos/commits/<sha>/check-runs` yourself before merging.
+CI (`.github/workflows/ci.yml`) runs: backend compile + ruff (errors only) + `pip-audit` (blocks on any known CVE) + `pytest tests/`; frontend `npm audit --audit-level=critical` + lint (non-blocking) + `npm test` + `npm run build` + Lighthouse budget (non-blocking, `lighthouserc.json`); a repo-wide gitleaks secret scan. The intended `main` ruleset requires a pull request, an approving review, the blocking Backend, Frontend, and Secret scan checks, and a branch current with `main`. Confirm the ruleset is active and those checks apply to the pull request's current commit before merging.
 
 "Done" for a UI change means: lint + test + build pass, AND the feature was exercised in a running browser (golden path + edge cases) — type checks and unit tests verify correctness, not that the feature actually works.
 

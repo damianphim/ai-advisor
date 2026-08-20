@@ -23,8 +23,9 @@ cd ../frontend
 npm install
 ```
 
-Copy `.env.local.example` → `.env.local` and fill in the keys (ask a
-maintainer — never commit real keys).
+Copy `.env.local.example` → `.env.local` and fill in the keys through the
+maintainer-approved sharing method. Never put credentials in GitHub issues,
+pull requests, chat transcripts, or commits.
 
 ## Running locally
 
@@ -53,17 +54,67 @@ npm run lint
 npm run build
 ```
 
-CI runs the same checks plus a secret scan and Lighthouse budget. PRs
-should be green before merging — branch protection enforcing this on
-GitHub is not yet turned on for `main`, so this is currently a norm,
-not a hard gate.
+CI runs the same checks plus dependency audits, a secret scan, and a Lighthouse
+budget. The intended `main` ruleset requires a pull request, one approving
+review, a branch current with `main`, and the blocking Backend, Frontend, and
+Secret scan checks. Confirm the ruleset is active before relying on enforcement,
+and never merge while a required or deployment check is pending or failing.
+
+## Team workflow
+
+GitHub is the source of truth for planned and active engineering work. Use the
+shared project board for prioritization and GitHub Issues for decisions and
+acceptance criteria. Google Docs can support brainstorming, but an item is not
+ready for implementation until its actionable requirements are captured in an
+issue.
+
+1. Search existing issues and pull requests before starting.
+2. Create or claim an issue with one owner, a concrete outcome, and acceptance
+   criteria. Small dependency and documentation maintenance may skip an issue
+   when the pull request fully explains the change.
+3. Create a short-lived branch from a freshly fetched canonical `main`.
+4. Open a focused pull request early. Link the issue and state the change, the
+   reason, validation performed, and any rollout or migration steps.
+5. Get review from another developer and resolve conversations. Authors do not
+   approve their own work.
+6. Merge only after the required checks pass on the current commit. Prefer
+   squash merge, then delete the branch.
+7. Verify production when behavior, infrastructure, data, or deployment changed
+   and record any follow-up work in an issue.
+
+Do not maintain a long-lived `dev` branch. Short-lived branches and preview
+deployments provide isolation while keeping `main` continuously releasable.
 
 ## Branch + commit conventions
 
-- Branch off `main`: `feat/clubs-search`, `fix/calendar-tz`, `chore/deps`.
+- Fetch before branching; do not branch from a stale local or fork `main`.
+- Use a descriptive prefix: `feat/clubs-search`, `fix/calendar-tz`,
+  `docs/contributor-workflow`, or `chore/deps`.
 - Write a real commit message — what changed and *why*. The "why" is the
   part future-you will thank present-you for.
-- Co-author tag at the bottom if pairing or AI-assisted.
+- Keep generated or AI-assisted changes under the same human review and testing
+  standard as handwritten changes.
+
+## Pull request checklist
+
+- The pull request has one clear outcome and links its issue when one exists.
+- Tests cover changed behavior, and the relevant commands above pass locally.
+- User-facing text is present in English, French, and Chinese.
+- Database migrations are idempotent and include the updated schema dump.
+- Screenshots or a short recording accompany visible UI changes.
+- No credential, private operational detail, or personal information appears in
+  the diff or discussion.
+- Deployment, migration, feature-flag, and rollback steps are documented when
+  applicable.
+
+## Public and private documentation
+
+Keep architecture, development conventions, product behavior, and public
+security guidance in this repository. Keep credential inventories, account
+ownership, billing, DNS/mail state, incident procedures, and personal contact
+details in the private operational repository. `AGENTS.md` is the canonical
+shared instruction file for coding agents; tool-specific files such as
+`CLAUDE.md` should point to it and contain only tool-specific additions.
 
 ## Where things live
 

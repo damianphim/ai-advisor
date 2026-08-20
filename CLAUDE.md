@@ -1,106 +1,30 @@
-# Symbolos — McGill AI Advisor
+# Claude guidance for Symbolos
 
-## Stack
-- **Frontend**: React + Vite (`frontend/src/`)
-- **Backend**: FastAPI + Python (`backend/api/`)
-- **DB**: Supabase (PostgreSQL + auth)
-- **AI**: Anthropic Claude Haiku (`claude-haiku-4-5-20251001`)
-- **Deploy**: Vercel (frontend + backend as serverless functions)
+Read [`AGENTS.md`](AGENTS.md) before changing this repository. It is the
+canonical source for architecture, security invariants, validation commands,
+and repository-specific gotchas. Do not duplicate that material here; update
+`AGENTS.md` when shared agent guidance changes.
 
-## Backend structure
-```
-backend/api/
-├── main.py              # FastAPI app, router registration
-├── config.py            # Settings (env vars via pydantic-settings)
-├── auth.py              # JWT auth, get_current_user_id, require_self
-├── routes/
-│   ├── chat.py          # /api/chat — main student chat, build_system_context()
-│   ├── cards.py         # /api/cards — AI advisor card generation & threads
-│   ├── courses.py       # /api/courses — search, details
-│   ├── transcript.py    # /api/transcript — PDF upload → course import
-│   ├── syllabus.py      # /api/syllabus — PDF upload → calendar events
-│   ├── degree_requirements.py  # /api/degree-requirements — progress tracking
-│   └── ...              # clubs, forum, calendar, users, notifications, etc.
-├── seeds/               # Degree requirement data per faculty (seed DB)
-│   ├── science_degree_requirements.py
-│   ├── arts_degree_requirements.py
-│   ├── foundation_degree_requirements.py  # U0 / Freshman year (Arts, Science, B.A.&Sc.)
-│   └── ... (one file per faculty)
-├── prompts/             # Static prompt content loaded once at startup
-│   ├── site_knowledge.md
-│   ├── mcgill_advising.md
-│   └── tab_guidance/    # One .md per tab (chat/calendar/courses/etc.)
-└── utils/
-    ├── supabase_client.py  # DB helpers (get_user_by_id, save_message, etc.)
-    ├── sanitise.py         # Input sanitisation (injection/XSS prevention)
-    ├── lang.py             # Shared lang_instruction() for FR/ZH/EN
-    └── cache.py            # Utility cache helpers
-```
+Also read [`CONTRIBUTING.md`](CONTRIBUTING.md) for the human workflow around
+issues, branches, pull requests, reviews, and merges.
 
-## Frontend structure
-```
-frontend/src/
-├── components/Dashboard/   # Main app tabs (ChatTab, CoursesTab, CalendarTab, etc.)
-├── components/Auth/        # Login
-├── lib/                    # API clients (api.js, cardsAPI.js, favoritesAPI.js, etc.)
-├── contexts/               # AuthContext, LanguageContext, ThemeContext, TimezoneContext
-└── hooks/                  # useNotificationPrefs, useUpcomingEvents
-```
+## Claude-specific workflow
 
-## Key patterns
-- **Auth**: JWT via Supabase. Every route uses `Depends(get_current_user_id)` + `require_self()`.
-- **AI context**: `build_system_context()` in `chat.py` — base student data cached 5min per user, static prompts loaded from `prompts/` at startup.
-- **Seed format**: Each seed file returns a list of program dicts with `blocks` → `{block_type, credits_needed, courses: [{course_code, credits, title}]}`.
-- **Reseed**: `POST /api/degree-requirements/seed?faculty=<name>` with `Authorization: Bearer <CRON_SECRET>`.
-- **History**: `settings.CHAT_CONTEXT_MESSAGES` (default 6) controls how many turns are sent to Claude.
+- Before starting work, inspect open pull requests and the current working tree
+  so concurrent work is not duplicated or overwritten.
+- This checkout may be shared with another session. Prefer an isolated worktree
+  for non-trivial changes, and check the active branch and status before editing.
+- Start each branch from a freshly fetched `damianphim/symbolos` `main`. In a
+  fork-based checkout, fetch the canonical repository as `upstream` and branch
+  from `upstream/main`; do not assume the fork's `main` is current.
+- Keep changes scoped to one issue or outcome. Record unrelated discoveries in
+  a GitHub issue rather than expanding the pull request silently.
+- Never merge based only on local results. Confirm the required GitHub checks
+  passed on the pull request's current commit and that the branch is mergeable.
+- Do not put credentials, private operational context, personal contact
+  details, or provider ownership information in this public repository. Those
+  belong in the private operational repository.
 
-## Env vars (backend)
-`ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY`, `CRON_SECRET`, `ADMIN_SECRET`, `ADMIN_EMAILS`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` (last two required in production only — get both from the Inngest Cloud dashboard for this app; without them every transcript/syllabus background job fails signature validation)
-
-## Common tasks
-- **Edit AI prompts**: edit files in `backend/api/prompts/` → restart server
-- **Fix degree requirements**: edit `backend/api/seeds/<faculty>_degree_requirements.py` → reseed
-- **Add a route**: create `backend/api/routes/<name>.py` → register in `main.py`
-- **Change Claude model**: set `CLAUDE_MODEL` / `CLAUDE_CARDS_MODEL` in env or `config.py`
-
-## Git / PR workflow
-- **Before creating a new branch or PR**, run `gh pr list -R damianphim/symbolos --state open` to see what's already in flight. Avoids duplicate work and — more importantly — avoids branch/working-tree collisions with another concurrent session.
-- This working directory can be shared by concurrent sessions/agents. Don't leave renames or edits staged across multiple tool calls — commit promptly, or another session's `git checkout` can sweep your staged changes into its own commit. Check `git status`/`git branch` before starting work if picking up mid-task.
-- If `gh pr create` fails with a GraphQL rate-limit error, check `gh api rate_limit` — GraphQL and REST quotas are tracked separately, so REST often still has headroom. Fall back to `gh api repos/damianphim/symbolos/pulls -f title=... -f head=owner:branch -f base=main -f body=...`.
-- **Always check CI before merging, never assume a PR is clean.** `gh api repos/damianphim/symbolos/commits/<sha>/check-runs` for the real test results, and `gh api repos/damianphim/symbolos/pulls/<n> --jq '{mergeable, mergeable_state}'` for actual mergeability.
-- **The fork (`alexdduda/ai-advisor`) and upstream (`damianphim/symbolos`) do not stay in sync.** Merging a PR via `gh api .../pulls/<n>/merge` only advances *upstream's* `main` — it never touches the fork's own `main`, since that's a separate branch on a separate repo. As of 2026-08-15 they'd diverged by 723 commits (confirmed via `git merge-base`), which is old and structural, not caused by any single session. A "dirty" `mergeable_state` on a trivial-looking diff almost always means you branched from the fork's stale `main` instead of upstream's. **Always create new branches from a freshly-fetched `upstream/main`** — `git fetch upstream && git checkout -b <branch> upstream/main` — never from local `main` or `origin/main`, which tracks the fork and can be arbitrarily behind. If a branch turns out to be based on the wrong parent, don't try to rebase it into place (a rebase across genuinely divergent history can replay hundreds of unrelated commits and hit real conflicts) — just recreate the branch from `upstream/main` and reapply the diff.
-
-## Feature map (what each part of the site is for)
-- **Home** — daily dashboard: AI "Brief" cards, current courses (active term only), Up Next deadlines, degree progress, quick actions.
-- **Brief / Chat** — AI advisor cards generated per-user from their academic data (`cards.py`); freeform Q&A grounded in student context (`chat.py`).
-- **Courses** — search McGill catalogue with grade history + RateMyProfessor; "My Courses" = saved / current (grouped by term) / completed.
-- **Degree Planning** — seed-driven requirement blocks per program, progress tracking, AI recommendations. U0 students get a **Foundation** tab (driven by `users.foundation_year`, falling back to `year = 0`) alongside their major/minor and electives. A course counts toward exactly one program: `effectiveAllocation` in `DegreePlanningView.jsx` resolves contested courses, and Foundation always wins — McGill doesn't let a U0 course also count toward a major or minor.
-- **Calendar** — events from syllabus import + manual entry + club events.
-- **Transcript import** — PDF → Claude extraction → preview → import (async Inngest job). Populates completed/current courses, GPA, program.
-- **Syllabus import** — PDF(s) → Claude → calendar events (async Inngest job).
-- **Clubs / Forum** — student club directory + newsletters; course/prof discussion.
-- **Profile** — settings, language, notifications, data deletion.
-
-## Engineering invariants (apply to every change)
-- **Security**: every new route takes `Depends(get_current_user_id)` + `require_self()`. Sanitize user input (`utils/sanitise.py`). Bound/validate all Claude-extracted values before persisting. New tables need RLS.
-- **PII**: never store or output student IDs, permanent codes, or other government identifiers. Transcripts are redacted **before** the Claude call — text is extracted locally (pypdf) and `26\d{7}` / `[A-Z]{4}\d{8}` patterns stripped (`transcript.py _redact_transcript_text`), then the redacted **text** is sent (never the raw PDF). Scanned/no-text PDFs are **refused** (`UnreadableTranscriptError`), never sent un-redacted. `_scrub_pii` on the model output is the defense-in-depth backstop. Keep all three working.
-- **i18n**: every user-facing string goes through `t()` with keys added to **all three** of `locales/en.js`, `fr.js`, `zh.js`. Never hardcode UI text.
-- **No emojis in UI**: use `react-icons` components only. Backend-generated emoji (e.g. advisor-card `icon`) must be mapped to a react-icon before rendering.
-- **Term-awareness**: `current_courses` rows carry `term`/`year`; UI filters by active term via `frontend/src/lib/termDates.js`. Rows with NULL term are legacy and always shown.
-- **External calls**: wrap outbound HTTP (Resend, Slack, Inngest send) in try/except with a clean 5xx + friendly message — never leak raw tracebacks. Distinguish transient (connection/timeout/429/5xx → "try again") from permanent errors in user-facing messages.
-- **Async jobs**: transcript/syllabus parsing returns `202 {job_id}`; frontends must poll `/api/jobs/{id}` (see `pollJob` in `ProfileSetup.jsx` / `TranscriptUpload.jsx`).
-- **Local dev**: full stack = `backend` (uvicorn :8000) + `inngest` (dev server :8288) + `frontend` (:5173) — all in `.claude/launch.json`. Without Inngest, uploads 503.
-
-## Agent skills
-
-### Issue tracker
-
-Issues are tracked as GitHub Issues on `damianphim/symbolos` (via the `gh` CLI). External PRs are not pulled into triage. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Default label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+If Claude discovers a durable repository-specific lesson, add it to the
+appropriate section of `AGENTS.md`. If the lesson changes how humans
+collaborate, update `CONTRIBUTING.md` as well.
