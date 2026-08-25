@@ -1,13 +1,13 @@
 fastapi==0.141.1
 starlette==1.6.0
-uvicorn[standard]==0.52.3
+uvicorn[standard]==0.52.4
 python-multipart==0.0.32
 pydantic==2.13.4
 pydantic-settings==2.15.0
 supabase==2.31.0
 httpx==0.28.1
 anthropic==0.122.0
-resend==2.36.0
+resend==2.39.0
 twilio==9.11.0
 email-validator==2.3.0
 python-dotenv==1.2.3
