@@ -174,6 +174,22 @@ def create_report(
     return {"id": row["id"], "status": row["status"], "created_at": row["created_at"]}
 
 
+def remove_content(content_type: str, content_id: str) -> None:
+    """
+    Delete the reported row. content_type == "user" is deliberately
+    rejected — removing a user account is not a "content removal" action,
+    it needs its own proportionate-restriction mechanism (suspension),
+    which is separate follow-up work, not this function's job.
+    """
+    spec = CONTENT_TYPES.get(content_type)
+    if spec is None:
+        raise HTTPException(status_code=400, detail=f"Unknown content_type: {content_type}")
+    if spec.owner_column is None:
+        raise HTTPException(status_code=400, detail="content_type 'user' cannot be removed as content")
+
+    get_supabase().table(spec.table).delete().eq("id", content_id).execute()
+
+
 def record_action(*, report_id: str, moderator_id: str, action: str, details: Optional[dict] = None) -> None:
     """Append one row to moderation_actions. Best-effort is NOT acceptable
     here (unlike audit.log_access) — moderator actions must not silently

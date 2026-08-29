@@ -35,6 +35,7 @@ Run these in the Supabase SQL Editor, in order.
 | `2026_08_11_drop_public_forum_policies.sql` | **SEC FIX**: drops leftover `{public}` RLS policies on `forum_posts`/`forum_replies` that `2026_06_23_rls_forum_and_club_tables.sql`'s `DROP POLICY IF EXISTS` list missed (it only named the new policy names) — anon could read the whole McGill-only forum. |
 | `2026_08_19_drop_leftover_forum_likes_policies.sql` | **SEC FIX**: same drift as `2026_08_11`, on the two tables that fix missed — `forum_post_likes`/`forum_reply_likes`. Confirmed against production: anon read `forum_post_likes`' one real row with zero auth. Drops every existing policy on both tables (not name-guessing) and recreates the intended `{authenticated}` ones. |
 | `2026_08_26_trust_safety_reports.sql` | New `reports` + `moderation_actions` tables (#161, Phase 1) — persistent, cross-content-type report storage and an immutable moderator-action log. No client-facing RLS policies at all on either table; every read/write goes through the backend with the service_role key. |
+| `2026_08_29_moderation_content_removal.sql` | Widens `moderation_actions.action`'s CHECK constraint to allow `'content_removed'` (#161, Phase 2a) — Phase 1 shipped with only `'dismiss'` as a resolution path. Looks up the constraint name via `pg_constraint` rather than guessing it. |
 
 All migrations are idempotent (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`, `DO $$ ... END $$` guards) so re-running them is a no-op.
 

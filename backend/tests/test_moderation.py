@@ -264,6 +264,100 @@ class TestModeratorQueue:
         assert resp.status_code == 404
 
 
+class TestResolveWithContentRemoval:
+    """Phase 2a of #161: the 'yes, this was a violation' path, as opposed
+    to dismiss's 'no violation found'."""
+
+    def test_resolve_requires_moderator(self, client, fake_supabase):
+        fake_supabase.set_table("reports", [
+            {"id": "r1", "reporter_id": "u1", "status": "open", "content_type": "forum_post", "content_id": "post-1"},
+        ])
+        resp = client.post(
+            "/api/moderation/reports/r1/resolve",
+            json={"action": "remove_content"},
+            headers=auth("author-1"),
+        )
+        assert resp.status_code == 403
+
+    def test_remove_content_deletes_row_and_resolves_report(self, client, fake_supabase):
+        _seed_post(fake_supabase, post_id="post-1", owner="author-1")
+        fake_supabase.set_table("reports", [
+            {"id": "r1", "reporter_id": "reporter-1", "status": "in_review",
+             "content_type": "forum_post", "content_id": "post-1"},
+        ])
+        resp = client.post(
+            "/api/moderation/reports/r1/resolve",
+            json={"action": "remove_content", "reason": "hate speech"},
+            headers=auth(MODERATOR_ID),
+        )
+        assert resp.status_code == 200
+
+        assert fake_supabase._tables["forum_posts"] == []  # the post is gone
+        assert fake_supabase._tables["reports"][0]["status"] == "resolved"
+
+        actions = fake_supabase._tables["moderation_actions"]
+        assert actions[0]["action"] == "content_removed"
+        assert actions[0]["details"]["content_id"] == "post-1"
+        assert actions[0]["details"]["reason"] == "hate speech"
+
+    def test_cannot_remove_content_for_a_user_report(self, client, fake_supabase):
+        """content_type == 'user' means the report is ABOUT a user account,
+        not a piece of content — 'remove_content' has nothing to delete
+        there. User restrictions are separate follow-up work."""
+        fake_supabase.set_table("reports", [
+            {"id": "r1", "reporter_id": "reporter-1", "status": "open",
+             "content_type": "user", "content_id": "bad-actor-1"},
+        ])
+        resp = client.post(
+            "/api/moderation/reports/r1/resolve",
+            json={"action": "remove_content"},
+            headers=auth(MODERATOR_ID),
+        )
+        assert resp.status_code == 400
+
+    def test_unsupported_action_rejected(self, client, fake_supabase):
+        fake_supabase.set_table("reports", [
+            {"id": "r1", "reporter_id": "u1", "status": "open", "content_type": "forum_post", "content_id": "post-1"},
+        ])
+        resp = client.post(
+            "/api/moderation/reports/r1/resolve",
+            json={"action": "restrict_user"},  # not implemented yet
+            headers=auth(MODERATOR_ID),
+        )
+        assert resp.status_code == 400
+
+    def test_resolving_an_already_resolved_report_conflicts(self, client, fake_supabase):
+        fake_supabase.set_table("reports", [
+            {"id": "r1", "reporter_id": "u1", "status": "resolved", "content_type": "forum_post", "content_id": "post-1"},
+        ])
+        resp = client.post(
+            "/api/moderation/reports/r1/resolve",
+            json={"action": "remove_content"},
+            headers=auth(MODERATOR_ID),
+        )
+        assert resp.status_code == 409
+
+    def test_resolving_a_dismissed_report_conflicts(self, client, fake_supabase):
+        fake_supabase.set_table("reports", [
+            {"id": "r1", "reporter_id": "u1", "status": "dismissed", "content_type": "forum_post", "content_id": "post-1"},
+        ])
+        resp = client.post(
+            "/api/moderation/reports/r1/resolve",
+            json={"action": "remove_content"},
+            headers=auth(MODERATOR_ID),
+        )
+        assert resp.status_code == 409
+
+    def test_resolve_report_not_found_404s(self, client, fake_supabase):
+        fake_supabase.set_table("reports", [])
+        resp = client.post(
+            "/api/moderation/reports/does-not-exist/resolve",
+            json={"action": "remove_content"},
+            headers=auth(MODERATOR_ID),
+        )
+        assert resp.status_code == 404
+
+
 class TestForumIntegration:
     """report_post/report_reply now persist through create_report(), not
     just send an email — this pins that #161's core acceptance criterion

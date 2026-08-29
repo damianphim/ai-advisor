@@ -1,10 +1,13 @@
 """
 Trust & safety: report submission + moderator queue.
 
-damianphim/symbolos#161, Phase 1 (engineering backbone). Deliberately NOT
-in this file yet — tracked as explicit follow-up work, not silently
-dropped: resolution actions (content removal, user restrictions), the
-public copyright/takedown page, and all frontend UI.
+damianphim/symbolos#161. Phase 1 (engineering backbone) shipped
+persistence + the queue with only "dismiss" as a resolution path. Phase 2a
+adds content removal. Deliberately NOT in this file yet — tracked as
+explicit follow-up work, not silently dropped: proportionate user
+restrictions (needs a decision about where suspension gets enforced —
+see #161's PR discussion), the public copyright/takedown page, and all
+frontend UI.
 
 Two routers because they have different prefixes (/api/reports vs.
 /api/moderation) and different audiences (any authenticated user vs.
@@ -25,7 +28,7 @@ from pydantic import BaseModel, Field
 
 from ..auth import get_current_user_id
 from ..utils.supabase_client import get_supabase
-from ..utils.moderation import create_report, record_action
+from ..utils.moderation import create_report, record_action, remove_content
 from .clubs.permissions import is_admin_user
 
 reports_router = APIRouter()
@@ -75,6 +78,11 @@ class NoteRequest(BaseModel):
 
 
 class DismissRequest(BaseModel):
+    reason: Optional[str] = Field(None, max_length=2000)
+
+
+class ResolveRequest(BaseModel):
+    action: str  # "remove_content" — the only resolution action implemented so far
     reason: Optional[str] = Field(None, max_length=2000)
 
 
@@ -168,14 +176,12 @@ async def dismiss_report(
     body: DismissRequest,
     current_user_id: str = Depends(get_current_user_id),
 ):
-    """Mark a report as unfounded. Deliberately the ONLY status-changing
-    action available in Phase 1 that isn't 'assign' — real resolution
-    actions (content removal, user restriction) that mutate OTHER tables
-    are tracked as explicit follow-up work, not built here."""
+    """Mark a report as unfounded — no violation, nothing done to the
+    content. See resolve_report for the "yes, take action" path."""
     _require_moderator(current_user_id)
     report = _get_report_or_404(report_id)
-    if report["status"] == "dismissed":
-        raise HTTPException(status_code=409, detail="Report is already dismissed")
+    if report["status"] in ("dismissed", "resolved"):
+        raise HTTPException(status_code=409, detail=f"Report is already {report['status']}")
 
     supabase = get_supabase()
     supabase.table("reports").update({"status": "dismissed"}).eq("id", report_id).execute()
@@ -184,3 +190,40 @@ async def dismiss_report(
         details={"from": report["status"], "to": "dismissed", "reason": body.reason},
     )
     return {"message": "Report dismissed"}
+
+
+@moderation_router.post("/reports/{report_id}/resolve")
+async def resolve_report(
+    report_id: str,
+    body: ResolveRequest,
+    current_user_id: str = Depends(get_current_user_id),
+):
+    """
+    Take an actual remediation action on the reported content, then mark
+    the report resolved. Only 'remove_content' exists so far —
+    proportionate user restrictions are separate follow-up work (#161),
+    not bundled here since enforcing a restriction needs its own decision
+    about where to check it (see api/utils/moderation.py's module
+    docstring... once that lands).
+    """
+    _require_moderator(current_user_id)
+    report = _get_report_or_404(report_id)
+    if report["status"] in ("dismissed", "resolved"):
+        raise HTTPException(status_code=409, detail=f"Report is already {report['status']}")
+
+    if body.action != "remove_content":
+        raise HTTPException(status_code=400, detail=f"Unsupported resolution action: {body.action}")
+
+    remove_content(report["content_type"], report["content_id"])
+
+    supabase = get_supabase()
+    supabase.table("reports").update({"status": "resolved"}).eq("id", report_id).execute()
+    record_action(
+        report_id=report_id, moderator_id=current_user_id, action="content_removed",
+        details={
+            "content_type": report["content_type"],
+            "content_id": report["content_id"],
+            "reason": body.reason,
+        },
+    )
+    return {"message": "Content removed, report resolved"}
