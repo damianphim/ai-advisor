@@ -788,15 +788,25 @@ async def report_post(
     current_user_id: str = Depends(get_current_user_id),
     user_sb = Depends(get_user_db),
 ):
-    """Flag a post for review. Sends an email to admins."""
+    """
+    Flag a post for review. Persists to the reports table (survives an
+    email/provider failure, appears in the moderator queue — #161) and
+    still sends the existing admin email notification.
+
+    No reason_category from the client yet — the frontend reason-category
+    picker is Phase 2 (#161) UI work; this defaults to "other" so today's
+    frontend (which sends no body at all) keeps working unchanged.
+    """
     _check_report_rate_limit(current_user_id)
     try:
+        from ..utils.moderation import create_report
+        create_report(
+            reporter_id=current_user_id, content_type="forum_post",
+            content_id=post_id, reason_category="other",
+        )
+
         post_res = user_sb.table("forum_posts").select("user_id, author, title, body").eq("id", post_id).execute()
-        if not post_res.data:
-            raise HTTPException(status_code=404, detail="Post not found")
-        p = post_res.data[0]
-        if p["user_id"] == current_user_id:
-            raise HTTPException(status_code=400, detail="You cannot report your own post")
+        p = post_res.data[0] if post_res.data else {}
         preview = f"{p.get('title', '')} — {p.get('body', '')}"
         _send_report_email("post", post_id, current_user_id, p.get("author", ""), preview)
         logger.info(f"Post {post_id} reported by {current_user_id}")
@@ -817,15 +827,19 @@ async def report_reply(
     current_user_id: str = Depends(get_current_user_id),
     user_sb = Depends(get_user_db),
 ):
-    """Flag a reply for review. Sends an email to admins."""
+    """Flag a reply for review. Persists to the reports table (#161) and
+    still sends the existing admin email notification. See report_post's
+    docstring for why reason_category defaults to "other" here."""
     _check_report_rate_limit(current_user_id)
     try:
+        from ..utils.moderation import create_report
+        create_report(
+            reporter_id=current_user_id, content_type="forum_reply",
+            content_id=reply_id, reason_category="other",
+        )
+
         reply_res = user_sb.table("forum_replies").select("user_id, author, body").eq("id", reply_id).execute()
-        if not reply_res.data:
-            raise HTTPException(status_code=404, detail="Reply not found")
-        r = reply_res.data[0]
-        if r["user_id"] == current_user_id:
-            raise HTTPException(status_code=400, detail="You cannot report your own reply")
+        r = reply_res.data[0] if reply_res.data else {}
         _send_report_email("reply", reply_id, current_user_id, r.get("author", ""), r.get("body", ""))
         logger.info(f"Reply {reply_id} reported by {current_user_id}")
         return {"message": "Report submitted"}

@@ -224,6 +224,8 @@ def fake_supabase(monkeypatch):
         "api.utils.verified_user",
         "api.utils.llm_budget",
         "api.utils.anomaly",
+        "api.utils.moderation",
+        "api.routes.moderation",
         "api.main",
     ):
         try:
