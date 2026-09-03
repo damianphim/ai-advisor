@@ -121,7 +121,9 @@ def _get_async_client() -> anthropic.AsyncAnthropic:
 
 SYLLABUS_EXTRACTION_PROMPT = """You are parsing a McGill University course syllabus PDF.
 Extract ALL available information and return a single JSON object with this exact structure.
-If a field is not present in the syllabus, use null.
+If a field is not present in the syllabus, use null. "instructor" must always be a single
+object, never a list — if the syllabus names multiple co-instructors, put only the primary
+one under "instructor" and list any others under "tas".
 
 {
   "course_code": "COMP 251",
@@ -350,8 +352,25 @@ def _next_weekday_date(day_name: str, term: str, year: int) -> Optional[str]:
 
 # ── Persist helper (called by the Inngest background job) ────────────────────
 
+def _normalize_instructor(instructor_field) -> dict:
+    """
+    SYMBOLOS-BACKEND-1B: the extraction prompt asks Claude for a single
+    "instructor" object, but a syllabus listing multiple instructors (e.g.
+    co-taught sections) sometimes gets Claude to return a list of them
+    instead — extracted.get("instructor", {}).get("name") then crashes with
+    AttributeError('list' object has no attribute 'get'). Never trust an
+    LLM's output to match the requested schema exactly; normalize instead.
+    """
+    if isinstance(instructor_field, dict):
+        return instructor_field
+    if isinstance(instructor_field, list) and instructor_field and isinstance(instructor_field[0], dict):
+        return instructor_field[0]  # first-listed instructor is treated as primary
+    return {}
+
+
 def _persist_syllabus_result(user_id: str, filename: str, extracted: dict, supabase) -> dict:
     """Save extracted syllabus data to the DB. Returns the per-file result dict."""
+    instructor = _normalize_instructor(extracted.get("instructor"))
     result = {
         "filename": filename,
         "success": True,
@@ -361,8 +380,8 @@ def _persist_syllabus_result(user_id: str, filename: str, extracted: dict, supab
         "section": extracted.get("section"),
         "term": extracted.get("term"),
         "year": extracted.get("year"),
-        "instructor_name": extracted.get("instructor", {}).get("name"),
-        "instructor_email": extracted.get("instructor", {}).get("email"),
+        "instructor_name": instructor.get("name"),
+        "instructor_email": instructor.get("email"),
         "schedule": extracted.get("schedule") or [],
         "calendar_events_added": 0,
         "current_course_updated": False,
@@ -376,7 +395,7 @@ def _persist_syllabus_result(user_id: str, filename: str, extracted: dict, supab
     course_title = extracted.get("course_title") or course_code
     term = extracted.get("term") or "Winter"
     year = extracted.get("year") or date.today().year
-    instructor = extracted.get("instructor") or {}
+    # instructor already normalized above — reused here, not re-derived.
     schedule_slots = extracted.get("schedule") or []
     assessments = extracted.get("assessments") or []
 

@@ -24,6 +24,39 @@ from .config import settings
 
 
 # ── Sentry — exception telemetry ──────────────────────────────────────────
+
+def _sentry_before_send(event, hint):
+    """
+    SYMBOLOS-BACKEND-V: Anthropic account-level usage-cap errors
+    ("You have reached your specified API usage limits...") get reported
+    by Sentry's own Anthropic SDK auto-instrumentation as unhandled,
+    high-priority errors — regardless of the broad `except Exception`
+    every AI call site already has around it. This isn't a code defect:
+    it's an expected condition (the configured spend cap was hit) that
+    self-resolves at the next reset window, not something a fix here can
+    prevent from recurring. Downgrade rather than drop it — ops should
+    still see that the whole AI feature was down, just not paged as if
+    it were a bug.
+    """
+    exc_info = hint.get("exc_info")
+    if exc_info:
+        exc = exc_info[1]
+        try:
+            import anthropic
+            is_usage_cap = (
+                isinstance(exc, anthropic.APIStatusError)
+                and exc.status_code == 400
+                and isinstance(exc.body, dict)
+                and "usage limit" in (exc.body.get("error", {}).get("message") or "").lower()
+            )
+        except Exception:
+            is_usage_cap = False
+        if is_usage_cap:
+            event["level"] = "warning"
+            event["fingerprint"] = ["anthropic-account-usage-cap-reached"]
+    return event
+
+
 # Init must run BEFORE FastAPI app is created so the integration patches
 # request handlers. Keeps quiet if SENTRY_DSN isn't set so local dev /
 # CI / preview without a DSN doesn't error out.
@@ -47,6 +80,7 @@ def _init_sentry() -> None:
             traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
             # Strip PII — user IDs are sufficient, we don't need emails or IPs.
             send_default_pii=False,
+            before_send=_sentry_before_send,
         )
     except Exception:
         # Never let a Sentry init failure crash startup.
