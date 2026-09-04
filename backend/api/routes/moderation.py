@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field
 
 from ..auth import get_current_user_id
 from ..utils.supabase_client import get_supabase
-from ..utils.moderation import create_report, record_action, remove_content
+from ..utils.moderation import create_report, record_action, remove_content, suspend_user
 from .clubs.permissions import is_admin_user
 
 reports_router = APIRouter()
@@ -82,7 +82,7 @@ class DismissRequest(BaseModel):
 
 
 class ResolveRequest(BaseModel):
-    action: str  # "remove_content" — the only resolution action implemented so far
+    action: str  # "remove_content" or "restrict_user"
     reason: Optional[str] = Field(None, max_length=2000)
 
 
@@ -200,26 +200,36 @@ async def resolve_report(
 ):
     """
     Take an actual remediation action on the reported content, then mark
-    the report resolved. Only 'remove_content' exists so far —
-    proportionate user restrictions are separate follow-up work (#161),
-    not bundled here since enforcing a restriction needs its own decision
-    about where to check it (see api/utils/moderation.py's module
-    docstring... once that lands).
+    the report resolved.
+
+    'remove_content' works on any content_type except "user" (there's no
+    content row to delete for a report about an account — see
+    remove_content()'s own docstring). 'restrict_user' is the reverse: it
+    ONLY applies to content_type == "user", suspending that account from
+    posting (not a full lockout — see api/utils/moderation.py's module
+    docstring for why).
     """
     _require_moderator(current_user_id)
     report = _get_report_or_404(report_id)
     if report["status"] in ("dismissed", "resolved"):
         raise HTTPException(status_code=409, detail=f"Report is already {report['status']}")
 
-    if body.action != "remove_content":
+    if body.action not in ("remove_content", "restrict_user"):
         raise HTTPException(status_code=400, detail=f"Unsupported resolution action: {body.action}")
 
-    remove_content(report["content_type"], report["content_id"])
+    if body.action == "restrict_user":
+        if report["content_type"] != "user":
+            raise HTTPException(status_code=400, detail="restrict_user only applies to content_type 'user' reports")
+        suspend_user(report["content_id"], reason=body.reason)
+        action_name = "user_restricted"
+    else:
+        remove_content(report["content_type"], report["content_id"])
+        action_name = "content_removed"
 
     supabase = get_supabase()
     supabase.table("reports").update({"status": "resolved"}).eq("id", report_id).execute()
     record_action(
-        report_id=report_id, moderator_id=current_user_id, action="content_removed",
+        report_id=report_id, moderator_id=current_user_id, action=action_name,
         details={
             "content_type": report["content_type"],
             "content_id": report["content_id"],

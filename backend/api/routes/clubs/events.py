@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 @router.post("/{club_id}/events")
 async def create_club_event(club_id: str, body: ClubEventCreate, current_user_id: str = Depends(get_current_user_id)):
     """Create a club event. Only club owner or Managers can create."""
+    from ...utils.moderation import require_not_suspended
+    require_not_suspended(current_user_id)
     if not is_club_owner_or_admin(club_id, current_user_id):
         raise HTTPException(status_code=403, detail="Only club owner or admins can create events")
     try:

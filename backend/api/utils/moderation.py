@@ -8,6 +8,18 @@ be re-implemented, and re-audited, per content type.
 
 reports/moderation_actions have no client-facing RLS policies at all (see
 the migration) — every read/write here uses the service-role client.
+
+Phase 2b adds suspend_user()/require_not_suspended() — a "proportionate
+user restriction" is deliberately NOT enforced by adding a check to
+get_current_user_id (api/auth.py), which runs on every single authenticated
+request in the app and already makes one Supabase call for JWT
+verification; a second DB read there would roughly double network calls
+app-wide just to catch the rare suspended user. A suspension is meant to
+block posting, not reading, so it's checked only at specific
+content-creation routes (require_not_suspended's own docstring lists
+them) — matching this codebase's existing pattern of inline per-route
+checks (is_email_verified, check_and_record_llm_usage) over blanket
+middleware.
 """
 from __future__ import annotations
 
@@ -177,9 +189,8 @@ def create_report(
 def remove_content(content_type: str, content_id: str) -> None:
     """
     Delete the reported row. content_type == "user" is deliberately
-    rejected — removing a user account is not a "content removal" action,
-    it needs its own proportionate-restriction mechanism (suspension),
-    which is separate follow-up work, not this function's job.
+    rejected — removing a user account is not a "content removal" action;
+    see suspend_user() for the proportionate-restriction path used instead.
     """
     spec = CONTENT_TYPES.get(content_type)
     if spec is None:
@@ -188,6 +199,36 @@ def remove_content(content_type: str, content_id: str) -> None:
         raise HTTPException(status_code=400, detail="content_type 'user' cannot be removed as content")
 
     get_supabase().table(spec.table).delete().eq("id", content_id).execute()
+
+
+def suspend_user(user_id: str, reason: Optional[str] = None) -> None:
+    """Proportionate restriction for a report about a user account
+    (content_type == "user"). Blocks posting via require_not_suspended()
+    at specific content-creation endpoints — deliberately NOT a full
+    account lockout; see the module docstring for why."""
+    get_supabase().table("users").update({
+        "is_suspended": True,
+        "suspended_at": datetime.now(timezone.utc).isoformat(),
+        "suspended_reason": reason,
+    }).eq("id", user_id).execute()
+
+
+def is_user_suspended(user_id: str) -> bool:
+    result = get_supabase().table("users").select("is_suspended").eq("id", user_id).execute()
+    return bool(result.data and result.data[0].get("is_suspended"))
+
+
+def require_not_suspended(user_id: str) -> None:
+    """Call at the top of any content-creation route (forum post/reply,
+    club submission, club event/announcement creation) — the specific
+    action a suspension is meant to block, not every authenticated request.
+    See the module docstring for why this isn't a check in
+    get_current_user_id instead."""
+    if is_user_suspended(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "account_suspended", "message": "Your account has been suspended."},
+        )
 
 
 def record_action(*, report_id: str, moderator_id: str, action: str, details: Optional[dict] = None) -> None:

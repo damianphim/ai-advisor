@@ -21,6 +21,8 @@ async def submit_club(submission: ClubSubmission, current_user_id: str = Depends
     from html import escape as _esc
     from ...utils.verified_user import is_email_verified
     from ...utils.anomaly import record_action
+    from ...utils.moderation import require_not_suspended
+    require_not_suspended(current_user_id)
     require_mcgill_email(current_user_id)
     if not is_email_verified(current_user_id):
         raise HTTPException(status_code=403, detail={"code": "email_not_verified", "message": "Verify your email to submit a club."})

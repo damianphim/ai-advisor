@@ -413,6 +413,8 @@ async def create_post(
     # community to people who control a real inbox.
     from ..utils.verified_user import is_email_verified
     from ..utils.anomaly import record_action
+    from ..utils.moderation import require_not_suspended
+    require_not_suspended(current_user_id)
     if not is_email_verified(current_user_id):
         raise HTTPException(status_code=403, detail={"code": "email_not_verified", "message": "Verify your email to post."})
     require_mcgill_email(current_user_id)
@@ -544,6 +546,8 @@ async def create_reply(
     """Add a reply to a post. Auth + verified email required."""
     from ..utils.verified_user import is_email_verified
     from ..utils.anomaly import record_action
+    from ..utils.moderation import require_not_suspended
+    require_not_suspended(current_user_id)
     if not is_email_verified(current_user_id):
         raise HTTPException(status_code=403, detail={"code": "email_not_verified", "message": "Verify your email to reply."})
     require_mcgill_email(current_user_id)
