@@ -438,3 +438,48 @@ def test_non_author_can_still_like_post(client, fake_supabase):
     resp = client.post(f"/api/forum/posts/{post_id}/like", headers=auth("viewer-1"))
     assert resp.status_code == 200
     assert resp.json()["liked"] is True
+
+
+# ── SEC FIX: create_post/create_reply no longer depend on the RLS-scoped
+# client (2026_09_05_authz_direct_write_hardening.sql dropped the direct-
+# insert policies these used to rely on; the Python checks — suspension,
+# email verification, McGill domain, rate limit, HTML escaping — are now
+# the ONLY gate, so the insert itself must go through service_role) ────────
+
+def test_create_post_does_not_use_the_rls_scoped_client(client, fake_supabase, monkeypatch):
+    """If create_post still depended on get_user_db(), this would 500 —
+    proving the insert now goes through get_supabase() (service_role)."""
+    import api.auth as auth_module
+
+    async def _broken_get_user_db(*_a, **_k):
+        raise AssertionError("create_post must not depend on the RLS-scoped client")
+    monkeypatch.setattr(auth_module, "get_user_db", _broken_get_user_db)
+
+    resp = client.post(
+        "/api/forum/posts",
+        json=_base_payload(category="general", review_target_value=None, rating=None),
+        headers=auth("author-1"),
+    )
+    assert resp.status_code == 201
+
+
+def test_create_reply_does_not_use_the_rls_scoped_client(client, fake_supabase, monkeypatch):
+    import api.auth as auth_module
+
+    async def _broken_get_user_db(*_a, **_k):
+        raise AssertionError("create_reply must not depend on the RLS-scoped client")
+    monkeypatch.setattr(auth_module, "get_user_db", _broken_get_user_db)
+
+    create = client.post(
+        "/api/forum/posts",
+        json=_base_payload(category="general", review_target_value=None, rating=None),
+        headers=auth("author-1"),
+    )
+    post_id = create.json()["post"]["id"]
+
+    resp = client.post(
+        f"/api/forum/posts/{post_id}/replies",
+        json={"author": "Some Student", "avatar_color": "#ed1b2f", "body": "reply"},
+        headers=auth("author-1"),
+    )
+    assert resp.status_code == 201

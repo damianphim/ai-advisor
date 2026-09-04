@@ -405,9 +405,17 @@ async def create_post(
     payload: PostCreate,
     req:     Request,
     current_user_id: str = Depends(get_current_user_id),
-    user_sb = Depends(get_user_db),
 ):
-    """Create a new forum post. Auth + verified email required."""
+    """
+    Create a new forum post. Auth + verified email required.
+
+    SEC FIX: inserts via the service-role client, not the RLS-scoped
+    user_sb — the direct-authenticated-insert RLS policy on forum_posts
+    let anyone bypass every check in this function (suspension, email
+    verification, McGill-domain gate, rate limiting, HTML escaping) by
+    calling PostgREST directly with a valid Supabase JWT. See the paired
+    migration dropping forum_posts_insert_own/forum_replies_insert_own.
+    """
     # SEC FIX #5: a throwaway account with mailer_autoconfirm could otherwise
     # spam the forum from a disposable address. Verified email keeps the
     # community to people who control a real inbox.
@@ -454,7 +462,7 @@ async def create_post(
             "professor_name":      payload.professor_name,
             "subject":             payload.subject,
         }
-        res = user_sb.table("forum_posts").insert(data).execute()
+        res = get_supabase().table("forum_posts").insert(data).execute()
         if not res.data:
             raise DatabaseException("create_post", "No data returned")
         return res.data[0]
@@ -541,9 +549,12 @@ async def create_reply(
     payload: ReplyCreate,
     req:     Request,
     current_user_id: str = Depends(get_current_user_id),
-    user_sb = Depends(get_user_db),
 ):
-    """Add a reply to a post. Auth + verified email required."""
+    """Add a reply to a post. Auth + verified email required.
+
+    SEC FIX: inserts via the service-role client — see create_post's
+    docstring for why (the RLS-scoped client's insert policy let anyone
+    bypass every Python-side check here via a direct PostgREST call)."""
     from ..utils.verified_user import is_email_verified
     from ..utils.anomaly import record_action
     from ..utils.moderation import require_not_suspended
@@ -557,8 +568,9 @@ async def create_reply(
         payload.author = escape(payload.author)
 
     def _run():
+        supabase = get_supabase()
         # Verify post exists
-        post_check = user_sb.table("forum_posts").select("id").eq("id", post_id).execute()
+        post_check = supabase.table("forum_posts").select("id").eq("id", post_id).execute()
         if not post_check.data:
             raise HTTPException(status_code=404, detail="Post not found")
         data = {
@@ -569,7 +581,7 @@ async def create_reply(
             "body":         payload.body,
             "program_info": payload.program_info,
         }
-        res = user_sb.table("forum_replies").insert(data).execute()
+        res = supabase.table("forum_replies").insert(data).execute()
         if not res.data:
             raise DatabaseException("create_reply", "No data returned")
         return res.data[0]
